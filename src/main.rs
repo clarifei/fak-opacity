@@ -108,22 +108,38 @@ fn is_target_window(window: &WindowInfo, target_keywords: &[String], keyword_cac
     })
 }
 
-// Function to check if window should be skipped (system windows)
-fn should_skip_window(window: &WindowInfo) -> bool {
-    window.title.is_empty() ||
-    window.title.contains("Program Manager") ||
-    window.title.contains("Desktop") ||
-    window.class_name.contains("Shell_TrayWnd")
+// Function to check if window should be skipped (system windows and ignored windows)
+fn should_skip_window(window: &WindowInfo, ignored_keywords: &[String], ignored_cache: &HashMap<String, String>) -> bool {
+    // Skip empty titles and system windows
+    if window.title.is_empty() ||
+       window.title.contains("Program Manager") ||
+       window.title.contains("Desktop") ||
+       window.class_name.contains("Shell_TrayWnd") {
+        return true;
+    }
+    
+    // Skip windows that match ignored keywords
+    let title_lower = window.title.to_lowercase();
+    ignored_keywords.iter().any(|keyword| {
+        let keyword_lower = ignored_cache.get(keyword).unwrap();
+        title_lower.contains(keyword_lower)
+    })
 }
 
 // Optimized main function for window monitoring
-fn monitor_windows(target_keywords: Vec<String>) -> std::result::Result<(), Box<dyn std::error::Error>> {
+fn monitor_windows(target_keywords: Vec<String>, ignored_keywords: Vec<String>) -> std::result::Result<(), Box<dyn std::error::Error>> {
     println!("Starting optimized window monitoring...");
     println!("Target keywords: {:?}", target_keywords);
+    println!("Ignored keywords: {:?}", ignored_keywords);
     println!("Press Ctrl+C to stop the program\n");
     
     // Pre-compute lowercase keywords for faster comparison
     let keyword_cache: HashMap<String, String> = target_keywords
+        .iter()
+        .map(|k| (k.clone(), k.to_lowercase()))
+        .collect();
+    
+    let ignored_cache: HashMap<String, String> = ignored_keywords
         .iter()
         .map(|k| (k.clone(), k.to_lowercase()))
         .collect();
@@ -156,7 +172,7 @@ fn monitor_windows(target_keywords: Vec<String>) -> std::result::Result<(), Box<
                         .filter(|window| {
                             window.hwnd != current_active &&
                             !is_target_window(window, &target_keywords, &keyword_cache) &&
-                            !should_skip_window(window)
+                            !should_skip_window(window, &ignored_keywords, &ignored_cache)
                         })
                         .collect();
                     
@@ -198,14 +214,27 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         // Add other keywords as needed
     ];
     
+    // List of keywords for windows to ignore (never minimize)
+    // You can modify this according to your needs
+    let ignored_keywords = vec![
+        "WhatsApp".to_string(),
+        // Add other keywords as needed
+    ];
+    
     println!("Target windows to monitor:");
     for keyword in &target_keywords {
         println!("  - Windows containing: '{}'", keyword);
     }
     println!();
     
+    println!("Windows to ignore (never minimize):");
+    for keyword in &ignored_keywords {
+        println!("  - Windows containing: '{}'", keyword);
+    }
+    println!();
+    
     // Start monitoring
-    monitor_windows(target_keywords)?;
+    monitor_windows(target_keywords, ignored_keywords)?;
     
     Ok(())
 }
